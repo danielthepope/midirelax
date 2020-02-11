@@ -61,14 +61,21 @@ def record():
     new_timings = []
     global PLAYING
     prev_time = None
+    command = ''
 
-    for line in iter(proc.stdout.readline, ''):
-        command = str(line.rstrip(), 'utf8')
-        if command == 'B1 40 7F':
+    while True:
+        character = proc.stdout.read(1).decode('utf-8')
+        if character == '\n':
+            command = ''
+        else:
+            command += character
+        if len(command) < 8:
+            continue
+        if command == 'B1 40 7F':  # Sustain pedal pressed
             recording = True
             PLAYING = False
             print('Recording')
-        elif command == 'B1 40 00':
+        elif command == 'B1 40 00':  # Sustain pedal released
             recording = False
             PLAYING = True
             if len(new_timings) > 0:
