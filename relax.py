@@ -5,11 +5,11 @@ import random
 from time import sleep, time
 from threading import Thread
 
-NOTES = [52, 54, 56, 59, 64, 66, 68, 71]  # chord E9
-MAX_VELOCITY = 58
-MIN_VELOCITY = 31
-MAX_TIME_MS = 3000
-MIN_TIME_MS = 300
+NOTES = [40, 47, 52, 54, 56, 59, 64, 66, 68, 71, 76]  # chord E9
+TIMINGS = [1244, 553, 362, 1563, 1042, 1883, 638, 1611, 1697, 1042, 2540, 263, 1497, 1423,
+           530, 551, 991, 2167, 551, 1992, 759, 533, 391, 668, 1121, 561, 398, 647, 697, 1199]
+VELOCITIES = [52, 27, 38, 39, 32, 35, 33, 39, 27, 23, 34, 26, 26, 27,
+              19, 27, 46, 25, 24, 39, 25, 33, 38, 35, 35, 36, 37, 39, 40, 37, 50]
 PLAYING = True
 
 
@@ -18,7 +18,7 @@ def send_midi(hex: str):
 
 
 def random_velocity() -> int:
-    return random.randint(MIN_VELOCITY, MAX_VELOCITY)
+    return random.choice(VELOCITIES)
 
 
 def to_hex(i: int) -> str:
@@ -44,9 +44,13 @@ def setup():
 
 def play_notes():
     while True:
+        expected_duration_s = random.choice(TIMINGS) / 1000
+        start_time = time()
         if PLAYING:
-            send_midi(random_note_hex(NOTES))
-        sleep(random.randint(MIN_TIME_MS, MAX_TIME_MS) / 1000)
+            note = random_note_hex(NOTES)
+            send_midi(note)
+            send_midi(note[0:6] + '00')
+        sleep(max(expected_duration_s - (time() - start_time), 0))
 
 
 def record():
@@ -67,15 +71,17 @@ def record():
         elif command == 'B1 40 00':
             recording = False
             PLAYING = True
-            if len(new_notes) > 0:
+            if len(new_timings) > 0:
                 print('Updating notes')
                 update_notes(new_notes)
                 update_velocities(new_velocities)
                 update_timings(new_timings)
-                new_notes = []
-                new_velocities = []
-                new_timings = []
-                prev_time = None
+            else:
+                print('Not enough notes played')
+            new_notes = []
+            new_velocities = []
+            new_timings = []
+            prev_time = None
         elif recording and command.startswith('90') and not(command.endswith('00')):
             if prev_time:
                 new_timings.append(int((time() - prev_time) * 1000))
@@ -93,21 +99,15 @@ def update_notes(notes):
 
 
 def update_velocities(velocities):
-    global MAX_VELOCITY
-    global MIN_VELOCITY
-    MAX_VELOCITY = max(velocities)
-    MIN_VELOCITY = min(velocities)
-    print('new max velocity:', MAX_VELOCITY)
-    print('new min velocity:', MIN_VELOCITY)
+    global VELOCITIES
+    VELOCITIES = velocities
+    print('new velocities:', VELOCITIES)
 
 
 def update_timings(timings):
-    global MAX_TIME_MS
-    global MIN_TIME_MS
-    MAX_TIME_MS = max(timings)
-    MIN_TIME_MS = min(timings)
-    print('new max time:', MAX_TIME_MS)
-    print('new min time:', MIN_TIME_MS)
+    global TIMINGS
+    TIMINGS = timings
+    print('new timings:', TIMINGS)
 
 
 if __name__ == "__main__":
