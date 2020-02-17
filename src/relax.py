@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-import subprocess
+import asyncio
 import random
-from time import sleep, time
-from threading import Thread
+from asyncio import AbstractEventLoop
+from time import time
 from typing import IO
 
 from midirelay import midi_relay
@@ -33,8 +33,10 @@ def setup(midi_out: IO):
     with open('sustain-on.syx', 'rb') as f:
         send_midi(midi_out, f.read())
 
+    print('Setup keyboard')
 
-def play_notes(midi_out: IO):
+
+async def play_notes(midi_out: IO):
     while True:
         expected_duration_s = random.choice(TIMINGS) / 1000
         start_time = time()
@@ -43,28 +45,31 @@ def play_notes(midi_out: IO):
             velocity = random.choice(VELOCITIES)
             play_note(midi_out, note, velocity)
             play_note(midi_out, note, 0)
-        sleep(max(expected_duration_s - (time() - start_time), 0))
+        await asyncio.sleep(max(expected_duration_s - (time() - start_time), 0))
 
 
-def record(midi_in: IO):
+async def record(midi_in: IO, loop: AbstractEventLoop):
     recording = False
     new_notes = []
     new_velocities = []
     new_timings = []
     global PLAYING
     prev_time = None
-    command = ''
+
+    reader = asyncio.StreamReader(loop=loop)
+    reader_protocol = asyncio.StreamReaderProtocol(reader)
+    await loop.connect_read_pipe(lambda: reader_protocol, midi_in)
 
     while True:
-        command = midi_in.read(1)
+        command = await reader.read(1)
         if command == b'\xB0':
             # It's a control. Let's get the next two bytes
-            command += midi_in.read(2)
-            if command == b'\xB0\x40\x7F': # Sustain pedal pressed
+            command += await reader.read(2)
+            if command == b'\xB0\x40\x7F':  # Sustain pedal pressed
                 recording = True
                 PLAYING = False
                 print('Recording')
-            elif command == b'\xB0\x40\x00': # Sustain pedal released
+            elif command == b'\xB0\x40\x00':  # Sustain pedal released
                 recording = False
                 PLAYING = True
                 if len(new_timings) > 0:
@@ -81,7 +86,7 @@ def record(midi_in: IO):
 
         if recording and command == b'\x90':
             # It's a note. Let's get the next two bytes
-            command += midi_in.read(2)
+            command += await reader.read(2)
             # We only care if the key has been pressed. Ignore key release
             if command[2] > 0:
                 if prev_time:
@@ -110,8 +115,11 @@ def update_timings(timings):
 
 
 if __name__ == "__main__":
-    with midi_relay('/dev/snd/midiC1D0') as (midi_in, midi_out):
-        setup(midi_out)
-        thread = Thread(target=play_notes, args=[midi_out])
-        thread.start()
-        record(midi_in)
+    loop = asyncio.get_event_loop()
+    try:
+        with midi_relay('/dev/snd/midiC1D0') as (midi_in, midi_out):
+            setup(midi_out)
+            loop.create_task(play_notes(midi_out))
+            loop.run_until_complete(record(midi_in, loop))
+    except Exception:
+        loop.close()
