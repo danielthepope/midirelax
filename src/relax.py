@@ -6,7 +6,7 @@ from asyncio import AbstractEventLoop
 from time import time
 from typing import IO
 
-from midirelay import midi_relay
+from midirelay import midi_relay, play_note, send_midi
 
 NOTES = [40, 47, 52, 54, 56, 59, 64, 66, 68, 71, 76]  # chord E9
 TIMINGS = [1244, 553, 362, 1563, 1042, 1883, 638, 1611, 1697, 1042, 2540, 263, 1497, 1423,
@@ -14,15 +14,6 @@ TIMINGS = [1244, 553, 362, 1563, 1042, 1883, 638, 1611, 1697, 1042, 2540, 263, 1
 VELOCITIES = [52, 27, 38, 39, 32, 35, 33, 39, 27, 23, 34, 26, 26, 27,
               19, 27, 46, 25, 24, 39, 25, 33, 38, 35, 35, 36, 37, 39, 40, 37, 50]
 PLAYING = True
-
-
-def send_midi(midi_out: IO, b: bytes):
-    midi_out.write(b)
-    midi_out.flush()
-
-
-def play_note(midi_out: IO, note: int, velocity: int):
-    send_midi(midi_out, b'\x90' + bytes([note, velocity]))
 
 
 def setup(midi_out: IO):
